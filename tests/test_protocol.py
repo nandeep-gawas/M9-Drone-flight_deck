@@ -10,7 +10,13 @@ import os
 # Ensure package root is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from flight_deck.state import FlightState, ProtocolType, SpeedMode
+from flight_deck.state import (
+    FlightState,
+    ProtocolType,
+    SpeedMode,
+    ControlStickMode,
+    TrajectoryPattern,
+)
 from flight_deck.protocol import (
     DroneProtocol,
     TC_CmdBits,
@@ -20,11 +26,14 @@ from flight_deck.protocol import (
     STICK_MIN,
     STICK_MAX,
     STICK_IDLE_THROTTLE,
+    TRIM_MAX_OFFSET,
+    TRIM_STEP,
     DURATION_TAKEOFF,
     DURATION_LAND,
     DURATION_EMERGENCY,
     DURATION_GYRO_CALIB,
     DURATION_FLIP,
+    DURATION_RETURN_HOME,
 )
 from flight_deck.network import DroneNetworkClient
 
@@ -110,6 +119,26 @@ class TestDroneProtocol(unittest.TestCase):
         valid, msg = DroneProtocol.verify_packet(pkt)
         self.assertTrue(valid, msg)
 
+    def test_tc_trims_application(self):
+        # Roll trim +6, Pitch trim -8, Yaw trim +10
+        pkt = DroneProtocol.build_tc_packet(
+            trim_roll=6,
+            trim_pitch=-8,
+            trim_yaw=10,
+        )
+        self.assertEqual(pkt[3], 128 + 6)   # Roll
+        self.assertEqual(pkt[4], 128 - 8)   # Pitch
+        self.assertEqual(pkt[6], 128 + 10)  # Yaw
+        valid, msg = DroneProtocol.verify_packet(pkt)
+        self.assertTrue(valid, msg)
+
+    def test_tc_return_home(self):
+        # One-Key Return in TC deflects pitch backward
+        pkt = DroneProtocol.build_tc_packet(is_fast_return=True)
+        self.assertEqual(pkt[4], 128 + 60)
+        valid, msg = DroneProtocol.verify_packet(pkt)
+        self.assertTrue(valid, msg)
+
     def test_gl_packet_structure_and_length(self):
         pkt = DroneProtocol.build_gl_packet()
         self.assertEqual(len(pkt), 9, "GL packet must be exactly 9 bytes on wire")
@@ -124,6 +153,13 @@ class TestDroneProtocol(unittest.TestCase):
         pkt = DroneProtocol.build_gl_packet(is_gyro_calib=True)
         self.assertTrue(pkt[6] & GL_CmdBits.GYRO_CALIB)
         self.assertEqual(pkt[6] & 0x80, 0x80, "GL Gyro bit must be 0x80 (bit 7)")
+        valid, msg = DroneProtocol.verify_packet(pkt)
+        self.assertTrue(valid, msg)
+
+    def test_gl_return_home_bit(self):
+        # In GL mode, return home sets Bit 5 (0x20)
+        pkt = DroneProtocol.build_gl_packet(is_fast_return=True)
+        self.assertTrue(pkt[6] & GL_CmdBits.RETURN_HOME)
         valid, msg = DroneProtocol.verify_packet(pkt)
         self.assertTrue(valid, msg)
 
@@ -158,11 +194,9 @@ class TestDroneProtocol(unittest.TestCase):
 
     def test_speed_scaling(self):
         # 30% speed mode should limit deflection:
-        # full +127 -> 128 + 38 = 166
         scaled_high = DroneProtocol.scale_deflection(STICK_CENTER, +127, SpeedMode.LOW)
         self.assertAlmostEqual(scaled_high, 166, delta=1)
 
-        # full -127 -> 128 - 38 = 90
         scaled_low = DroneProtocol.scale_deflection(STICK_CENTER, -127, SpeedMode.LOW)
         self.assertAlmostEqual(scaled_low, 90, delta=1)
 
@@ -180,7 +214,7 @@ class TestDroneProtocol(unittest.TestCase):
 
 
 class TestDroneNetworkClient(unittest.TestCase):
-    """Test state machine and safety rules of DroneNetworkClient in loopback mode."""
+    """Test state machine, trims, trajectory, and safety rules of DroneNetworkClient in loopback mode."""
 
     def setUp(self):
         self.client = DroneNetworkClient(loopback_mode=True)
@@ -219,6 +253,37 @@ class TestDroneNetworkClient(unittest.TestCase):
         self.assertEqual(self.client.flight_state, FlightState.EMERGENCY)
         self.assertFalse(self.client.is_armed)
         self.assertEqual(self.client.throttle, 0)
+
+    def test_trims_adjustment_and_reset(self):
+        self.client.adjust_trim("pitch", 4)
+        self.client.adjust_trim("roll", -6)
+        self.client.adjust_trim("yaw", 8)
+        self.assertEqual(self.client.trim_pitch, 4)
+        self.assertEqual(self.client.trim_roll, -6)
+        self.assertEqual(self.client.trim_yaw, 8)
+
+        self.client.reset_trims()
+        self.assertEqual(self.client.trim_pitch, 0)
+        self.assertEqual(self.client.trim_roll, 0)
+        self.assertEqual(self.client.trim_yaw, 0)
+
+    def test_circle_turn_toggle(self):
+        self.assertFalse(self.client.is_circle_turn)
+        self.client.toggle_circle_turn()
+        self.assertTrue(self.client.is_circle_turn)
+        self.client.toggle_circle_turn()
+        self.assertFalse(self.client.is_circle_turn)
+
+    def test_trajectory_start_and_stop(self):
+        # Trajectory requires FLYING state
+        self.client.arm()
+        self.client.flight_state = FlightState.FLYING
+        self.client.start_trajectory(TrajectoryPattern.SQUARE)
+        self.assertTrue(self.client.trajectory_active)
+        self.assertEqual(self.client.trajectory_pattern, TrajectoryPattern.SQUARE)
+
+        self.client.stop_trajectory()
+        self.assertFalse(self.client.trajectory_active)
 
 
 if __name__ == "__main__":

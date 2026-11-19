@@ -8,6 +8,7 @@ Use for:
   - Verifying takeoff/landing pulses (Bit 0 duration ~1000ms).
   - Verifying altitude hold bit (Bit 1 in Byte 8) and neutral hover (Throttle=128).
   - Verifying emergency stop (Bit 1 in Byte 7, Throttle=0).
+  - Verifying Trims, Auto-spin, and One-Key Return pulses.
 
 Usage:
   python3 tools/packet_inspector.py
@@ -83,10 +84,23 @@ def decode_gl_packet(pkt: bytes) -> str:
     cmd = pkt[6]
     chk = pkt[7]
 
+    is_return = bool(cmd & GL_CmdBits.RETURN_HOME)
+    is_takeoff = bool(cmd & GL_CmdBits.TAKEOFF)
+    is_land = bool(cmd & GL_CmdBits.LAND)
+    is_emergency = bool(cmd & GL_CmdBits.EMERGENCY)
+
+    actions = []
+    if is_takeoff: actions.append("TAKEOFF")
+    if is_land: actions.append("LAND")
+    if is_emergency: actions.append("EMERGENCY")
+    if is_return: actions.append("RETURN_HOME")
+    if not actions: actions.append("NORMAL")
+    action_tag = " | ".join(actions)
+
     valid, reason = DroneProtocol.verify_packet(pkt)
     status_str = "VALID" if valid else f"INVALID ({reason})"
 
-    return f"[{status_str}] R={r:3d} P={p:3d} T={t:3d} Y={y:3d} | Cmd=0x{cmd:02X} Chk=0x{chk:02X}"
+    return f"[{status_str}] R={r:3d} P={p:3d} T={t:3d} Y={y:3d} | Cmd=0x{cmd:02X} Chk=0x{chk:02X} | {action_tag}"
 
 
 def main():

@@ -1,5 +1,6 @@
 """
 Flight State & Operational Mode Enums for M9 Drone Flight Deck.
+Reverse-engineered from the official Android KY UFO application.
 """
 
 from enum import Enum, IntEnum
@@ -37,3 +38,20 @@ SPEED_SCALES: Dict[SpeedMode, float] = {
     SpeedMode.MEDIUM: 0.60,
     SpeedMode.HIGH: 1.00,
 }
+
+
+class ControlStickMode(Enum):
+    """
+    Joystick layout configuration.
+    Mode 2 is standard in the US/world; Mode 1 is popular in Europe/Asia.
+    """
+    MODE_2_US = "MODE_2"  # Left: Throttle/Yaw, Right: Pitch/Roll (Default)
+    MODE_1_EU = "MODE_1"  # Left: Pitch/Yaw, Right: Throttle/Roll (Right-Hand Throttle)
+
+
+class TrajectoryPattern(Enum):
+    """Autonomous trajectory / track flight patterns from KY UFO app."""
+    SQUARE = "SQUARE"        # Box pattern
+    CIRCLE = "CIRCLE"        # 360-degree orbit
+    FIGURE_8 = "FIGURE_8"    # Figure-8 / S-curve
+    TRIANGLE = "TRIANGLE"    # Triangular flight path

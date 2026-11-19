@@ -1,7 +1,7 @@
 # M9 Drone Flight Deck
 
 > **Linux Desktop Controller for FALAFLY F1 Series / M9 Ultra-Light / FLOW-UFO Toy Drones**  
-> Clean, lightweight, modular Python desktop application reverse-engineered from the official Android `KY UFO` application (`com.cooingdv.kyufo`).  
+> Complete Python flight cockpit reverse-engineered from the official Android `KY UFO` application (`com.cooingdv.kyufo`).  
 > **Zero camera, RTSP, or video streaming dependencies.**
 
 ---
@@ -18,27 +18,47 @@
 | **Control Frequency** | 20 Hz (50 ms cycle) |
 | **Keepalive Frequency** | 1 Hz (1000 ms cycle, wire payload: `[0x01, 0x01]`) |
 | **Hardware Platform** | Bouffalo Lab BL60X / TC Protocol (`deviceType == 10`) |
+| **Stick Modes** | Mode 2 (Default / US) & Mode 1 (European / Right-Hand Throttle) |
+| **Gamepad Support** | Native Linux `/dev/input/js*` USB & Bluetooth controller input |
 | **Operating System** | Linux Mint / Ubuntu / Debian / Fedora / Arch |
 
 ---
 
-## 2. Root Cause Analysis of Previous Flight Bugs
+## 2. Complete Features Reconstructed from Android App
 
-### Bug A: Automatic Takeoff Kept Climbing (Runaway Ascent)
-* **Root Cause**: In naive implementations, the takeoff command flag (`Bit 0` of Byte 7) was either left asserted continuously in the 20 Hz transmission loop, or the throttle stick was improperly held above neutral (e.g. 200–255), or Byte 8 altitude hold (`Bit 1`) was set to 0. In the BL60X optical-flow firmware:
-  1. Takeoff is a **transient 1000 ms pulse** (`Bit 0 = 1`).
-  2. Throttle must be **neutral hover** (`128 / 0x80`) during and after takeoff.
-  3. After 1000 ms, `Bit 0` **must transition back to 0**. If `Bit 0` remains 1, the flight controller firmware interprets it as a continuous climbing command or repeated takeoff trigger.
-  4. Byte 8 (`AuxByte`) must assert `Bit 1 = 1` (`0x02`) to engage optical flow / barometer altitude hold.
-
-### Bug B: Landing Button Did Not Work
-* **Root Cause**: The landing trigger in the Android APK Dalvik bytecode (`FlyController.setFastDrop`) activates the exact same command bit (`Bit 0 = 1`) as takeoff, with throttle at neutral hover (`128 / 0x80`). When a controller attempted to send a different undocumented command code or set throttle to 0, the drone ignored it. Furthermore, sending `Bit 0 = 1` indefinitely prevented the firmware from entering its autonomous descent sequence.
-* **The Fix**: The controller issues a clean **1000 ms pulse** of `Bit 0 = 1` at neutral throttle (`128`), then returns `Bit 0` to `0` and transitions internal state to `LANDING`, allowing the drone's optical-flow descent algorithm to land smoothly.
-
-### Bug C: Emergency Stop vs. Landing vs. Disarming
-* **Emergency Stop (`Bit 1 = 1`, Throttle = `0`)**: Completely and immediately cuts PWM power to all 4 motors mid-air. The drone drops instantly. **Reserved strictly for emergencies.**
-* **Controlled Landing (`Bit 0 = 1` for 1.0s, Throttle = `128`)**: Triggers firmware auto-descent with active gyro and optical stabilization until touchdown.
-* **Disarm**: Cuts throttle to `0` on the ground. Mid-air disarm requires explicit user confirmation.
+1. **Flight Controls**:
+   - One-Button Auto Takeoff (verified 1000ms pulse with altitude hold lock)
+   - One-Button Auto Landing (verified 1000ms pulse with controlled descent)
+   - **Emergency Stop** (instant motor power cutoff mid-air, throttle forced to 0)
+   - Manual Throttle, Pitch, Roll, and Yaw controls with smooth spring-back
+2. **Special Maneuvers & Flight Stunts**:
+   - Directional 360° Flips (Front Flip, Back Flip, Left Flip, Right Flip)
+   - Continuous 360° Auto-Spin / Circle Turn (`isCircleTurn`)
+   - One-Key Return to Home (`isFastReturn`)
+   - Headless Mode (`setNoHeadMode`)
+   - Optical Flow / Barometer Altitude Hold Lock (`isFixedHeightMode`)
+   - Gyroscope Calibration (`setGyroCorrection`, 2.0s level ground pulse)
+   - Drone LED Lights Toggle (`isOpenLight`)
+3. **Autonomous Track / Trajectory Flight (`trackFly`)**:
+   - **Square**: Autonomous 4-sided box flight pattern
+   - **Circle**: 360° orbital trajectory
+   - **Figure-8**: Lissajous looping pattern
+   - **Triangle**: 3-point delta trajectory
+   - Real-time progress bar, pattern selector, and instant abort control
+4. **Digital Trim System (Physical Airframe Drift Compensation)**:
+   - Pitch Trim (Forward / Backward fine tuning $\pm 24$)
+   - Roll Trim (Left / Right fine tuning $\pm 24$)
+   - Yaw Trim (CCW / CW fine tuning $\pm 24$)
+   - One-click "Reset All Trims to 0"
+5. **Stick Layout Switcher**:
+   - **Mode 2 (US / World Standard)**: Left = Throttle & Yaw, Right = Pitch & Roll
+   - **Mode 1 (European / Japanese)**: Left = Pitch & Yaw, Right = Throttle & Roll
+6. **Live Telemetry & Dashboard**:
+   - Flight Duration Timer (MM:SS clock active only while armed/in-flight)
+   - Estimated Battery Gauge & Voltage Meter (percentage with color alerts)
+   - Native Linux USB/Bluetooth Gamepad detection (`/dev/input/js*`)
+   - Live 20 Hz UDP Hex Packet Inspector & Diagnostic Console
+   - Propeller-Removed Bench Testing Mode for desk testing
 
 ---
 
@@ -52,15 +72,15 @@
 * **Byte 0**: Transport prefix `0x03`
 * **Byte 1**: Frame header `0x66`
 * **Byte 2**: Payload length `0x14` (20 bytes)
-* **Byte 3**: **Roll** (`1..255`, neutral `128 / 0x80`, Left `< 128`, Right `> 128`)
-* **Byte 4**: **Pitch** (`1..255`, neutral `128 / 0x80`, Forward `< 128`, Backward `> 128`)
+* **Byte 3**: **Roll** (`1..255`, neutral `128 / 0x80`, Left `< 128`, Right `> 128` + Trim)
+* **Byte 4**: **Pitch** (`1..255`, neutral `128 / 0x80`, Forward `< 128`, Backward `> 128` + Trim)
 * **Byte 5**: **Throttle** (`0..255`, neutral hover `128 / 0x80`, Down `< 128`, Up `> 128`)
-* **Byte 6**: **Yaw** (`1..255`, neutral `128 / 0x80`, Turn Left `< 128`, Turn Right `> 128`)
+* **Byte 6**: **Yaw** (`1..255`, neutral `128 / 0x80`, Turn Left `< 128`, Turn Right `> 128` + Trim)
 * **Byte 7 (Cmd Bits)**:
   * `Bit 0` (`0x01`): `TAKEOFF_LAND` (1.0s active pulse)
-  * `Bit 1` (`0x02`): `EMERGENCY` (1.0s pulse, motor kill)
+  * `Bit 1` (`0x02`): `EMERGENCY` (1.0s pulse, motor cut)
   * `Bit 2` (`0x04`): `GYRO_CALIB` (2.0s pulse on flat surface)
-  * `Bit 3` (`0x08`): `FLIP` (0.6s pulse + stick deflection)
+  * `Bit 3` (`0x08`): `FLIP` (0.6s pulse + directional deflection)
   * `Bit 4` (`0x10`): `LIGHT_ON` (Drone LEDs active, default `1`)
 * **Byte 8 (Aux Bits)**:
   * `Bit 0` (`0x01`): `HEADLESS` (Headless navigation mode)
@@ -78,13 +98,13 @@
 M9-Drone-flight_deck/
 ├── flight_deck/
 │   ├── __init__.py           # Package exports
-│   ├── controller.py         # PyQt5 desktop cockpit GUI
-│   ├── network.py            # 20 Hz UDP engine, keepalive, and state machine
+│   ├── controller.py         # Full PyQt5 desktop cockpit GUI
+│   ├── network.py            # 20 Hz UDP engine, keepalive, trims, trajectory, gamepad
 │   ├── protocol.py           # Dalvik-accurate packet encoder & verifier
-│   └── state.py              # FlightState, ProtocolType, SpeedMode enums
+│   └── state.py              # FlightState, ProtocolType, SpeedMode, StickMode enums
 ├── tests/
 │   ├── __init__.py
-│   └── test_protocol.py      # Automated unit test suite (16 tests)
+│   └── test_protocol.py      # Automated unit test suite (22 tests)
 ├── tools/
 │   ├── __init__.py
 │   └── packet_inspector.py   # Pre-flight loopback UDP packet inspection tool
@@ -96,110 +116,59 @@ M9-Drone-flight_deck/
 
 ---
 
-## 5. Installation & Setup
+## 5. Keyboard & Gamepad Controls
 
-### Prerequisites
-* Python 3.8+
-* PyQt5
+### Keyboard Reference
 
-```bash
-# Clone the repository
-git clone git@github.com:nandeep-gawas/M9-Drone-flight_deck.git
-cd M9-Drone-flight_deck
-
-# Install requirements
-pip3 install -r requirements.txt
-```
-
----
-
-## 6. Pre-Flight Verification & Bench Testing
-
-> [!IMPORTANT]
-> **ALWAYS bench test with PROPELLERS REMOVED before conducting actual flight!**
-
-### Step 1: Run the Automated Unit Tests
-```bash
-python3 -m unittest discover tests
-```
-*Expected: 16 tests passing (`OK`).*
-
-### Step 2: Run the Loopback Packet Inspector
-In Terminal 1, run the inspector to monitor UDP port 7099:
-```bash
-python3 tools/packet_inspector.py --port 7099
-```
-
-In Terminal 2, launch the flight deck in loopback bench mode:
-```bash
-python3 run_controller.py --loopback
-```
-
-Observe in Terminal 1:
-1. Normal neutral hover shows:
-   `[VALID] R=128 P=128 T=128 Y=128 | Cmd=0x10 Aux=0x02 Chk=0x12 | ALT_HOLD`
-2. Pressing `T` (Takeoff) shows a 1.0-second pulse:
-   `[VALID] R=128 P=128 T=128 Y=128 | Cmd=0x11 Aux=0x02 Chk=0x13 | TAKEOFF/LAND_PULSE | ALT_HOLD`
-   followed immediately by returning to `Cmd=0x10` (no continuous climb).
-3. Pressing `E` (Emergency) immediately drops Throttle to 0:
-   `[VALID] R=128 P=128 T=  0 Y=128 | Cmd=0x12 Aux=0x02 Chk=0x90 | EMERGENCY_STOP | ALT_HOLD`
-
----
-
-## 7. Live Flight Operating Guide
-
-1. Power on the drone on a flat, level surface.
-2. Connect laptop Wi-Fi to `FLOW-UFO-XXXXXX`.
-3. Launch controller:
-   ```bash
-   python3 run_controller.py
-   ```
-4. Perform **Gyro Calibration (`G`)** while drone is motionless on the ground.
-5. Uncheck **PROPELLER-REMOVED BENCH TEST MODE** once verified.
-6. Press **`C`** to ARM motors (propellers will spin at idle).
-7. Press **`T`** to TAKEOFF. Drone rises to ~1.0m and enters stable optical-flow hover.
-8. Control flight using keyboard inputs.
-9. Press **`L`** to LAND smoothly.
-10. In any hazard, press **`E`** (EMERGENCY STOP) to immediately cut power.
-
-### Keyboard Controls Reference
-
-| Key | Function | Wire Value / Action |
+| Key | Function | Action |
 |---|---|---|
-| **`W` / `S`** | Pitch (Forward / Backward) | `W: < 128`, `S: > 128` |
-| **`A` / `D`** | Roll (Left / Right) | `A: < 128`, `D: > 128` |
-| **`I` / `K`** or **`Up` / `Down`** | Throttle (Climb / Descend) | `I: > 128`, `K: < 128` |
-| **`J` / `L`** or **`Left` / `Right`** | Yaw (Turn Left / Right) | `J: < 128`, `L: > 128` |
-| **`Space`** | Center Sticks (Neutral Hover) | `R=128, P=128, T=128, Y=128` |
-| **`C`** | Arm / Disarm Motors | Toggles Ground Arming State |
-| **`T`** | One-Button Auto Takeoff | 1000ms pulse (`Cmd Bit 0 = 1`) |
-| **`L`** | One-Button Auto Landing | 1000ms pulse (`Cmd Bit 0 = 1`) |
-| **`E`** | **Emergency Motor Stop** | Cuts PWM power immediately (`Cmd Bit 1 = 1`) |
-| **`G`** | Gyroscope Calibration | 2000ms pulse (`Cmd Bit 2 = 1`) |
-| **`H`** | Headless Mode Toggle | Toggles `Aux Bit 0` |
-| **`1` / `2` / `3`** | Speed Modes | 30% Low / 60% Medium / 100% High |
+| **`W` / `S`** | Pitch (Mode 2) / Throttle (Mode 1) | Forward / Backward (or Climb / Descend) |
+| **`A` / `D`** | Roll | Bank Left / Bank Right |
+| **`I` / `K`** or **`Up` / `Down`** | Throttle (Mode 2) / Pitch (Mode 1) | Climb / Descend (or Forward / Backward) |
+| **`J` / `L`** or **`Left` / `Right`**| Yaw | Turn Left / Turn Right |
+| **`Space`** | Center Sticks | Immediately centers all sticks to hover (128) |
+| **`C`** | Arm / Disarm Motors | Ground arming toggle |
+| **`T`** | One-Button Auto Takeoff | 1000ms pulse (`Bit 0 = 1`) |
+| **`L`** | One-Button Auto Landing | 1000ms pulse (`Bit 0 = 1`) |
+| **`E`** | **Emergency Motor Stop** | Immediately cuts motor power mid-air |
+| **`G`** | Gyroscope Calibration | 2000ms pulse on flat surface |
+| **`H`** | Headless Mode Toggle | Latching orientation toggle |
+| **`R`** | One-Key Return Home | Commands return flight vector toward pilot |
+| **`O`** | 360° Auto-Spin / Circle Turn | Smooth continuous yaw rotation in hover |
+| **`M`** | Stick Mode Toggle | Switches between Mode 2 (US) and Mode 1 (EU) |
+| **`Z`** | Reset All Trims | Re-zeros Pitch, Roll, and Yaw trims |
+| **`Shift + W/S`** | Fine Pitch Trim | Forward / Backward trim adjustment ($\pm 2$) |
+| **`Shift + A/D`** | Fine Roll Trim | Left / Right trim adjustment ($\pm 2$) |
+| **`Shift + J/L`** | Fine Yaw Trim | CCW / CW trim adjustment ($\pm 2$) |
+| **`1` / `2` / `3`** | Speed Selection | 30% Beginner / 60% Cruising / 100% Sport |
+
+### Linux USB / Bluetooth Gamepad Mapping
+
+* **Left Stick**: Yaw (X-axis) & Throttle (Y-axis)
+* **Right Stick**: Roll (X-axis) & Pitch (Y-axis)
+* **Button A (Cross)**: Takeoff
+* **Button B (Circle)**: Land
+* **Button X (Square)**: Front 360° Flip
+* **Button Y (Triangle)**: **Emergency Motor Stop**
+* **LB / RB**: Headless Toggle / Altitude Hold Toggle
 
 ---
 
-## 8. Feature Status
+## 6. How to Run
 
-- [x] 21-Byte TC Protocol framing and XOR checksum
-- [x] Optical flow altitude hold (`Aux Bit 1 = 1`)
-- [x] Timed 1000ms Takeoff pulse with auto-hover transition
-- [x] Timed 1000ms Landing pulse with descent state
-- [x] Instant Emergency Stop with throttle cut
-- [x] Gyroscope calibration (2000ms level surface pulse)
-- [x] Directional 360° flips (Front, Back, Left, Right)
-- [x] Headless mode toggle
-- [x] Client-side speed deflection limiting (30%, 60%, 100%)
-- [x] Smooth keyboard spring-back virtual joysticks (50 Hz)
-- [x] 1 Hz Keepalive heartbeat (`[0x01, 0x01]`) & Teardown (`[0x08, 0x01]`)
-- [x] Propeller-removed bench testing safety guard
-- [x] Live hex packet inspector and telemetry logging console
-- [x] Complete automated unit test suite
+```bash
+# 1. Run unit test suite
+python3 -m unittest discover tests
+
+# 2. Pre-flight bench testing (loopback mode)
+python3 run_controller.py --loopback
+
+# 3. Live drone flight (connected to FLOW-UFO Wi-Fi)
+python3 run_controller.py
+```
 
 ---
 
-## 9. License
+## 7. License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - Copyright (c) 2026 Nandeep Gawas
