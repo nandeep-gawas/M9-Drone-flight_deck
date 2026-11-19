@@ -34,6 +34,7 @@ from flight_deck.protocol import (
     DURATION_GYRO_CALIB,
     DURATION_FLIP,
     DURATION_RETURN_HOME,
+    DURATION_TORNADO_360,
 )
 from flight_deck.network import DroneNetworkClient
 
@@ -284,6 +285,34 @@ class TestDroneNetworkClient(unittest.TestCase):
 
         self.client.stop_trajectory()
         self.assertFalse(self.client.trajectory_active)
+
+
+    def test_tornado_360_cw_and_ccw(self):
+        # When disarmed, trigger should be rejected
+        self.client.trigger_tornado_360("cw")
+        self.assertEqual(self.client._tornado_until, 0.0)
+
+        # Arm and set in-flight
+        self.client.arm()
+        self.client.flight_state = FlightState.FLYING
+
+        # CW Tornado 360
+        self.client.trigger_tornado_360("cw")
+        self.assertGreater(self.client._tornado_until, 0.0)
+        self.assertEqual(self.client._tornado_yaw, STICK_CENTER + 70)
+
+        # Space (center_sticks) cancels active tornado
+        self.client.center_sticks()
+        self.assertEqual(self.client._tornado_until, 0.0)
+
+        # CCW Tornado 360
+        self.client.trigger_tornado_360("ccw")
+        self.assertGreater(self.client._tornado_until, 0.0)
+        self.assertEqual(self.client._tornado_yaw, STICK_CENTER - 70)
+
+        # Emergency stop cancels active tornado
+        self.client.trigger_emergency_stop()
+        self.assertEqual(self.client._tornado_until, 0.0)
 
 
 if __name__ == "__main__":

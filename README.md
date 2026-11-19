@@ -32,6 +32,7 @@
    - **Emergency Stop** (instant motor power cutoff mid-air, throttle forced to 0)
    - Manual Throttle, Pitch, Roll, and Yaw controls with smooth spring-back
 2. **Special Maneuvers & Flight Stunts**:
+   - **Tornado 360** (`trigger_tornado_360`): Calibrated single complete 360-degree yaw rotation in hover (`U` for Clockwise, `Shift + U` for Counter-Clockwise)
    - Directional 360° Flips (Front Flip, Back Flip, Left Flip, Right Flip)
    - Continuous 360° Auto-Spin / Circle Turn (`isCircleTurn`)
    - One-Key Return to Home (`isFastReturn`)
@@ -104,7 +105,7 @@ M9-Drone-flight_deck/
 │   └── state.py              # FlightState, ProtocolType, SpeedMode, StickMode enums
 ├── tests/
 │   ├── __init__.py
-│   └── test_protocol.py      # Automated unit test suite (22 tests)
+│   └── test_protocol.py      # Automated unit test suite (23 tests)
 ├── tools/
 │   ├── __init__.py
 │   └── packet_inspector.py   # Pre-flight loopback UDP packet inspection tool
@@ -135,6 +136,8 @@ M9-Drone-flight_deck/
 | **`H`** | Headless Mode Toggle | Latching orientation toggle |
 | **`R`** | One-Key Return Home | Commands return flight vector toward pilot |
 | **`O`** | 360° Auto-Spin / Circle Turn | Smooth continuous yaw rotation in hover |
+| **`U`** | **Tornado 360 (CW)** | Executes one complete 360° clockwise yaw spin |
+| **`Shift + U`** | **Tornado 360 (CCW)** | Executes one complete 360° counter-clockwise yaw spin |
 | **`M`** | Stick Mode Toggle | Switches between Mode 2 (US) and Mode 1 (EU) |
 | **`Z`** | Reset All Trims | Re-zeros Pitch, Roll, and Yaw trims |
 | **`Shift + W/S`** | Fine Pitch Trim | Forward / Backward trim adjustment ($\pm 2$) |

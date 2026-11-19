@@ -34,6 +34,7 @@ DURATION_GYRO_CALIB = 2.0       # 2000 ms pulse (FlyController.setGyroCorrection
 DURATION_FLIP = 0.6             # 600 ms pulse (DeviceBLFragment.turn360)
 DURATION_LANDING_DESCENT = 4.0  # Estimated descent duration until touchdown
 DURATION_RETURN_HOME = 3.0      # 3.0s auto-return pulse window
+DURATION_TORNADO_360 = 1.8      # 1.8s for one complete 360-degree yaw rotation
 
 
 class TC_CmdBits(IntEnum):

@@ -24,7 +24,7 @@ from .protocol import (
     TRIM_MAX_OFFSET, TRIM_STEP,
     DURATION_TAKEOFF, DURATION_LAND, DURATION_EMERGENCY,
     DURATION_GYRO_CALIB, DURATION_FLIP, DURATION_LANDING_DESCENT,
-    DURATION_RETURN_HOME
+    DURATION_RETURN_HOME, DURATION_TORNADO_360
 )
 
 log = logging.getLogger("FlightDeck.Net")
@@ -78,6 +78,8 @@ class DroneNetworkClient:
         self._gyro_until = 0.0
         self._flip_until = 0.0
         self._return_home_until = 0.0
+        self._tornado_until = 0.0
+        self._tornado_yaw = STICK_CENTER
         self._flip_pitch = STICK_CENTER
         self._flip_roll = STICK_CENTER
 
@@ -290,6 +292,7 @@ class DroneNetworkClient:
             self._landing_descent_until = 0.0
             self._flip_until = 0.0
             self._return_home_until = 0.0
+            self._tornado_until = 0.0
             self.trajectory_active = False
             self.status_message = "!! EMERGENCY MOTOR CUT (PWM OFF) !!"
         log.warning("ACTION: EMERGENCY MOTOR CUT EXECUTED! (Bit 1 = 1, Throttle = 0)")
@@ -355,6 +358,28 @@ class DroneNetworkClient:
             self._return_home_until = now + DURATION_RETURN_HOME
             self.status_message = "ONE-KEY RETURN TO HOME ACTIVE (3.0s)"
         log.info("ACTION: One-Key Return triggered")
+        self._notify_status()
+
+    def trigger_tornado_360(self, direction: str = "cw"):
+        """
+        Tornado 360: Executes exactly one complete 360-degree yaw rotation in hover.
+        direction: 'cw' (Clockwise) or 'ccw' (Counter-Clockwise)
+        """
+        now = time.monotonic()
+        with self._lock:
+            if not self.is_armed:
+                self.status_message = "Tornado 360 rejected: Drone not armed!"
+                self._notify_status()
+                return
+            self._tornado_until = now + DURATION_TORNADO_360
+            if direction.lower() == "ccw":
+                self._tornado_yaw = STICK_CENTER - 70
+                dir_label = "CCW"
+            else:
+                self._tornado_yaw = STICK_CENTER + 70
+                dir_label = "CW"
+            self.status_message = f"🌪 TORNADO 360 ({dir_label}) IN PROGRESS (1.8s)..."
+        log.info("ACTION: Tornado 360 (%s) triggered (1.8s rotation pulse)", dir_label)
         self._notify_status()
 
     def toggle_circle_turn(self) -> bool:
@@ -484,6 +509,7 @@ class DroneNetworkClient:
             self.roll = STICK_CENTER
             self.pitch = STICK_CENTER
             self.yaw = STICK_CENTER
+            self._tornado_until = 0.0
             if self.is_armed:
                 self.throttle = STICK_CENTER
 
@@ -497,6 +523,7 @@ class DroneNetworkClient:
         self._gyro_until = 0.0
         self._flip_until = 0.0
         self._return_home_until = 0.0
+        self._tornado_until = 0.0
 
     def _update_trajectory(self, now: float) -> Tuple[int, int]:
         """
@@ -582,6 +609,13 @@ class DroneNetworkClient:
                 is_gyro = now < self._gyro_until
                 is_flip = now < self._flip_until
                 is_fast_return = now < self._return_home_until
+                is_tornado = now < self._tornado_until
+
+                # Auto-transition: Tornado 360 expiration
+                if self._tornado_until > 0.0 and not is_tornado:
+                    self._tornado_until = 0.0
+                    self.status_message = "TORNADO 360 COMPLETE -> HOVER STABILIZED"
+                    self._notify_status()
 
                 # Auto-transition: TAKING_OFF -> FLYING once 1.0s takeoff pulse finishes
                 if self.flight_state == FlightState.TAKING_OFF and not is_takeoff:
@@ -621,6 +655,10 @@ class DroneNetworkClient:
                 if is_flip:
                     p = self._flip_pitch
                     r = self._flip_roll
+
+                # If Tornado 360 is active, override yaw to calibrated single 360 rotation rate
+                if is_tornado and self.flight_state in (FlightState.FLYING, FlightState.ARMED):
+                    y = self._tornado_yaw
 
                 # If Auto-spin / Circle Turn is active, apply continuous yaw
                 if self.is_circle_turn and self.flight_state == FlightState.FLYING:

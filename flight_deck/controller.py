@@ -325,6 +325,17 @@ class DroneDesktopWindow(QMainWindow):
         self.btn_circle_turn.clicked.connect(self._on_circle_turn_clicked)
         aux_layout.addWidget(self.btn_circle_turn, 1, 2)
 
+        # Tornado 360 Action (One complete 360-degree yaw rotation)
+        self.btn_tornado = QPushButton("🌪 Tornado 360 CW (U)")
+        self.btn_tornado.setStyleSheet("background-color: #00838f; color: white; padding: 7px; font-weight: bold;")
+        self.btn_tornado.clicked.connect(lambda: self._on_tornado_clicked("cw"))
+        aux_layout.addWidget(self.btn_tornado, 2, 0, 1, 2)
+
+        self.btn_tornado_ccw = QPushButton("🌪 CCW (Shift+U)")
+        self.btn_tornado_ccw.setStyleSheet("background-color: #00695c; color: white; padding: 7px; font-weight: bold;")
+        self.btn_tornado_ccw.clicked.connect(lambda: self._on_tornado_clicked("ccw"))
+        aux_layout.addWidget(self.btn_tornado_ccw, 2, 2)
+
         layout.addWidget(aux_group)
 
         # Stick Layout Mode (Mode 2 vs Mode 1)
@@ -702,6 +713,13 @@ class DroneDesktopWindow(QMainWindow):
         self.btn_circle_turn.setStyleSheet(f"padding: 7px; font-weight: bold; {'color: #ab47bc;' if is_on else 'color: white;'}")
         self._log_info(f"Continuous 360 Auto-Spin toggled to {state}.")
 
+    def _on_tornado_clicked(self, direction: str = "cw"):
+        if not self.client.is_armed:
+            QMessageBox.warning(self, "Arm Required", "Drone must be armed before executing Tornado 360!")
+            return
+        self.client.trigger_tornado_360(direction)
+        self._log_info(f"Triggered Tornado 360 ({direction.upper()}) — executing one complete 360° yaw rotation.")
+
     def _on_stick_mode_changed(self, mode: ControlStickMode):
         self.client.set_stick_mode(mode)
         self._log_info(f"Switched stick layout to {mode.value}.")
@@ -885,6 +903,8 @@ class DroneDesktopWindow(QMainWindow):
                 self._adjust_trim("yaw", -TRIM_STEP)
             elif key == Qt.Key_L:
                 self._adjust_trim("yaw", TRIM_STEP)
+            elif key == Qt.Key_U:
+                self._on_tornado_clicked("ccw")
             return
 
         if key == Qt.Key_C:
@@ -903,6 +923,8 @@ class DroneDesktopWindow(QMainWindow):
             self._on_return_home_clicked()
         elif key == Qt.Key_O:
             self._on_circle_turn_clicked()
+        elif key == Qt.Key_U:
+            self._on_tornado_clicked("cw")
         elif key == Qt.Key_Z:
             self._reset_trims()
         elif key == Qt.Key_M:

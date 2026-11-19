@@ -82,7 +82,21 @@ cd M9-Drone-flight_deck
 
 ---
 
-## 4. Keyboard Controls Reference
+## 4. Special Stunts: Tornado 360 & 360° Flips
+
+### Tornado 360 (One Complete Yaw Rotation)
+* **What it does:** Executes exactly one full 360° yaw spin in place while maintaining stabilized hover altitude, then automatically locks back into steady hover.
+* **Clockwise (CW):** Press **`U`** or click **`🌪 Tornado 360 CW (U)`**.
+* **Counter-Clockwise (CCW):** Press **`Shift + U`** or click **`🌪 CCW (Shift+U)`**.
+* **Cancel anytime:** Tap `Spacebar` (center sticks) or `E` (emergency stop).
+
+### Directional Flips
+* Click **Flip Forward**, **Flip Backward**, **Flip Left**, or **Flip Right** in the Aux Controls panel.
+* Ensure you have at least 1.5–2 meters of ceiling clearance before executing flips.
+
+---
+
+## 5. Keyboard Controls Reference
 
 | Shortcut | Function | Description |
 |:---:|:---|:---|
@@ -99,6 +113,8 @@ cd M9-Drone-flight_deck
 | **`H`** | **Headless Mode** | Toggles relative pilot orientation |
 | **`R`** | **Return Home** | Auto-flies toward pilot orientation |
 | **`O`** | **Auto-Spin** | Continuous 360° circle yaw rotation |
+| **`U`** | **Tornado 360 (CW)** | Executes exactly one complete 360° clockwise yaw rotation |
+| **`Shift + U`** | **Tornado 360 (CCW)** | Executes exactly one complete 360° counter-clockwise yaw rotation |
 | **`M`** | **Stick Mode** | Toggles Mode 2 (US) vs Mode 1 (EU) |
 | **`Z`** | **Reset Trims** | Re-zeros Pitch, Roll, and Yaw trims |
 | **`Shift + WASD`**| **Fine Trims** | Drift micro-adjustments ($\pm 2$) |
@@ -106,7 +122,7 @@ cd M9-Drone-flight_deck
 
 ---
 
-## 5. Gamepad / Joystick Support
+## 6. Gamepad / Joystick Support
 
 Plug in any USB or Bluetooth gamepad (Xbox, PlayStation, Logitech, etc.):
 * **Left Stick:** Throttle (vertical) & Yaw (horizontal)

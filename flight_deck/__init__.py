@@ -30,6 +30,7 @@ from .protocol import (
     DURATION_FLIP,
     DURATION_LANDING_DESCENT,
     DURATION_RETURN_HOME,
+    DURATION_TORNADO_360,
 )
 from .network import DroneNetworkClient
 from .controller import DroneDesktopWindow
@@ -58,6 +59,7 @@ __all__ = [
     "DURATION_FLIP",
     "DURATION_LANDING_DESCENT",
     "DURATION_RETURN_HOME",
+    "DURATION_TORNADO_360",
     "DroneNetworkClient",
     "DroneDesktopWindow",
 ]
