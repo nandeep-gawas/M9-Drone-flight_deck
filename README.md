@@ -32,6 +32,7 @@
    - **Emergency Stop** (instant motor power cutoff mid-air, throttle forced to 0)
    - Manual Throttle, Pitch, Roll, and Yaw controls with smooth spring-back
 2. **Special Maneuvers & Flight Stunts**:
+   - **Double Barrel Roll + 180° Snap Turn** (`trigger_double_barrel_snap`): Multi-stage acrobatic sequence chaining a Right Barrel Roll (0.6s), inter-roll leveling (0.4s), Left Barrel Roll (0.6s), inter-maneuver leveling (0.4s), and a 180° Snap Yaw Turn (0.9s) before locking back into stabilized hover (`B` for standard Right $\rightarrow$ Left, `Shift + B` for Left $\rightarrow$ Right)
    - **Tornado 360** (`trigger_tornado_360`): Calibrated single complete 360-degree yaw rotation in hover (`U` for Clockwise, `Shift + U` for Counter-Clockwise)
    - Directional 360° Flips (Front Flip, Back Flip, Left Flip, Right Flip)
    - Continuous 360° Auto-Spin / Circle Turn (`isCircleTurn`)
@@ -105,7 +106,7 @@ M9-Drone-flight_deck/
 │   └── state.py              # FlightState, ProtocolType, SpeedMode, StickMode enums
 ├── tests/
 │   ├── __init__.py
-│   └── test_protocol.py      # Automated unit test suite (23 tests)
+│   └── test_protocol.py      # Automated unit test suite (25 tests)
 ├── tools/
 │   ├── __init__.py
 │   └── packet_inspector.py   # Pre-flight loopback UDP packet inspection tool
@@ -138,6 +139,8 @@ M9-Drone-flight_deck/
 | **`O`** | 360° Auto-Spin / Circle Turn | Smooth continuous yaw rotation in hover |
 | **`U`** | **Tornado 360 (CW)** | Executes one complete 360° clockwise yaw spin |
 | **`Shift + U`** | **Tornado 360 (CCW)** | Executes one complete 360° counter-clockwise yaw spin |
+| **`B`** | **Double Barrel + Snap Turn** | Right Roll $\rightarrow$ Left Roll $\rightarrow$ 180° CW Snap Turn $\rightarrow$ Hover |
+| **`Shift + B`** | **Double Barrel Reverse** | Left Roll $\rightarrow$ Right Roll $\rightarrow$ 180° CCW Snap Turn $\rightarrow$ Hover |
 | **`M`** | Stick Mode Toggle | Switches between Mode 2 (US) and Mode 1 (EU) |
 | **`Z`** | Reset All Trims | Re-zeros Pitch, Roll, and Yaw trims |
 | **`Shift + W/S`** | Fine Pitch Trim | Forward / Backward trim adjustment ($\pm 2$) |

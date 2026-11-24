@@ -24,7 +24,8 @@ from .protocol import (
     TRIM_MAX_OFFSET, TRIM_STEP,
     DURATION_TAKEOFF, DURATION_LAND, DURATION_EMERGENCY,
     DURATION_GYRO_CALIB, DURATION_FLIP, DURATION_LANDING_DESCENT,
-    DURATION_RETURN_HOME, DURATION_TORNADO_360
+    DURATION_RETURN_HOME, DURATION_TORNADO_360,
+    DURATION_BARREL_SETTLE, DURATION_SNAP_TURN, DURATION_DOUBLE_BARREL
 )
 
 log = logging.getLogger("FlightDeck.Net")
@@ -82,6 +83,12 @@ class DroneNetworkClient:
         self._tornado_yaw = STICK_CENTER
         self._flip_pitch = STICK_CENTER
         self._flip_roll = STICK_CENTER
+
+        # Double Barrel Roll + 180° Snap Turn sequence
+        self._double_barrel_active = False
+        self._double_barrel_start_time = 0.0
+        self._double_barrel_direction = "right_first"
+        self._last_double_barrel_status = ""
 
         # Trajectory / Track Flight Automation
         self.trajectory_active = False
@@ -268,6 +275,7 @@ class DroneNetworkClient:
             self.pitch = STICK_CENTER
             self.yaw = STICK_CENTER
             self.trajectory_active = False
+            self._double_barrel_active = False
             self._land_until = now + DURATION_LAND
             self._landing_descent_until = now + DURATION_LAND + DURATION_LANDING_DESCENT
             self.status_message = "AUTONOMOUS LANDING (DESCENT) IN PROGRESS..."
@@ -293,6 +301,7 @@ class DroneNetworkClient:
             self._flip_until = 0.0
             self._return_home_until = 0.0
             self._tornado_until = 0.0
+            self._double_barrel_active = False
             self.trajectory_active = False
             self.status_message = "!! EMERGENCY MOTOR CUT (PWM OFF) !!"
         log.warning("ACTION: EMERGENCY MOTOR CUT EXECUTED! (Bit 1 = 1, Throttle = 0)")
@@ -381,6 +390,72 @@ class DroneNetworkClient:
             self.status_message = f"🌪 TORNADO 360 ({dir_label}) IN PROGRESS (1.8s)..."
         log.info("ACTION: Tornado 360 (%s) triggered (1.8s rotation pulse)", dir_label)
         self._notify_status()
+
+    def trigger_double_barrel_snap(self, direction: str = "right_first"):
+        """
+        Double Barrel Roll + 180° Snap Turn:
+        1. Performs a barrel roll to the right (or left if reversed).
+        2. Immediately performs a second barrel roll to the left (or right).
+        3. Executes a 180° yaw snap turn.
+        4. Returns to level orientation and stabilizes in hover.
+        """
+        now = time.monotonic()
+        with self._lock:
+            if not self.is_armed:
+                self.status_message = "Double Barrel rejected: Drone not armed!"
+                self._notify_status()
+                return
+            self._double_barrel_active = True
+            self._double_barrel_start_time = now
+            self._double_barrel_direction = direction
+            self._last_double_barrel_status = ""
+            dir_label = "Right->Left" if direction == "right_first" else "Left->Right"
+            self.status_message = f"🌪 DOUBLE BARREL + 180° SNAP TURN ({dir_label}) IN PROGRESS (2.9s)..."
+        log.info("ACTION: Double Barrel + 180 Snap Turn triggered (direction=%s)", direction)
+        self._notify_status()
+
+    @staticmethod
+    def compute_double_barrel_phase(
+        elapsed: float, direction: str = "right_first"
+    ) -> Tuple[int, int, int, bool, str]:
+        """
+        Computes stick deflections (roll, pitch, yaw), flip command flag,
+        and status message for the Double Barrel Roll + 180° Snap Turn sequence.
+
+        Total duration: 2.9s
+        - [0.0, 0.6): Phase 1 - First Barrel Roll (0.6s pulse)
+        - [0.6, 1.0): Phase 2 - Inter-roll stabilization & edge reset (0.4s)
+        - [1.0, 1.6): Phase 3 - Second Barrel Roll (0.6s pulse)
+        - [1.6, 2.0): Phase 4 - Inter-maneuver stabilization & edge reset (0.4s)
+        - [2.0, 2.9): Phase 5 - 180° Snap Turn (0.9s yaw pulse)
+        - >= 2.9: Sequence complete
+        """
+        is_right_first = direction == "right_first"
+        first_roll = STICK_MAX if is_right_first else STICK_MIN
+        second_roll = STICK_MIN if is_right_first else STICK_MAX
+        first_label = "Right" if is_right_first else "Left"
+        second_label = "Left" if is_right_first else "Right"
+        yaw_snap = STICK_CENTER + 75 if is_right_first else STICK_CENTER - 75
+        turn_label = "CW" if is_right_first else "CCW"
+
+        t1 = DURATION_FLIP                               # 0.6
+        t2 = t1 + DURATION_BARREL_SETTLE                 # 1.0
+        t3 = t2 + DURATION_FLIP                          # 1.6
+        t4 = t3 + DURATION_BARREL_SETTLE                 # 2.0
+        t5 = t4 + DURATION_SNAP_TURN                     # 2.9
+
+        if elapsed < t1:
+            return first_roll, STICK_CENTER, STICK_CENTER, True, f"🌪 DOUBLE BARREL [1/3]: {first_label} Barrel Roll (0.6s)..."
+        elif elapsed < t2:
+            return STICK_CENTER, STICK_CENTER, STICK_CENTER, False, "🌪 DOUBLE BARREL: Leveling between rolls (0.4s)..."
+        elif elapsed < t3:
+            return second_roll, STICK_CENTER, STICK_CENTER, True, f"🌪 DOUBLE BARREL [2/3]: {second_label} Barrel Roll (0.6s)..."
+        elif elapsed < t4:
+            return STICK_CENTER, STICK_CENTER, STICK_CENTER, False, "🌪 DOUBLE BARREL: Leveling before snap turn (0.4s)..."
+        elif elapsed < t5:
+            return STICK_CENTER, STICK_CENTER, yaw_snap, False, f"🌪 DOUBLE BARREL [3/3]: 180° {turn_label} Snap Turn (0.9s)..."
+        else:
+            return STICK_CENTER, STICK_CENTER, STICK_CENTER, False, "DOUBLE BARREL + 180° SNAP TURN COMPLETE -> HOVER STABILIZED"
 
     def toggle_circle_turn(self) -> bool:
         """
@@ -510,6 +585,7 @@ class DroneNetworkClient:
             self.pitch = STICK_CENTER
             self.yaw = STICK_CENTER
             self._tornado_until = 0.0
+            self._double_barrel_active = False
             if self.is_armed:
                 self.throttle = STICK_CENTER
 
@@ -524,6 +600,7 @@ class DroneNetworkClient:
         self._flip_until = 0.0
         self._return_home_until = 0.0
         self._tornado_until = 0.0
+        self._double_barrel_active = False
 
     def _update_trajectory(self, now: float) -> Tuple[int, int]:
         """
@@ -610,6 +687,7 @@ class DroneNetworkClient:
                 is_flip = now < self._flip_until
                 is_fast_return = now < self._return_home_until
                 is_tornado = now < self._tornado_until
+                is_double_barrel = self._double_barrel_active
 
                 # Auto-transition: Tornado 360 expiration
                 if self._tornado_until > 0.0 and not is_tornado:
@@ -659,6 +737,25 @@ class DroneNetworkClient:
                 # If Tornado 360 is active, override yaw to calibrated single 360 rotation rate
                 if is_tornado and self.flight_state in (FlightState.FLYING, FlightState.ARMED):
                     y = self._tornado_yaw
+
+                # If Double Barrel Roll + 180° Snap Turn sequence is active, apply staged controls
+                if is_double_barrel and self.flight_state in (FlightState.FLYING, FlightState.ARMED):
+                    elapsed = now - self._double_barrel_start_time
+                    if elapsed >= DURATION_DOUBLE_BARREL:
+                        self._double_barrel_active = False
+                        self.status_message = "DOUBLE BARREL + 180° SNAP TURN COMPLETE -> HOVER STABILIZED"
+                        self._notify_status()
+                    else:
+                        db_r, db_p, db_y, db_flip, db_status = self.compute_double_barrel_phase(
+                            elapsed, self._double_barrel_direction
+                        )
+                        r, p, y = db_r, db_p, db_y
+                        if db_flip:
+                            is_flip = True
+                        if db_status != self._last_double_barrel_status:
+                            self._last_double_barrel_status = db_status
+                            self.status_message = db_status
+                            self._notify_status()
 
                 # If Auto-spin / Circle Turn is active, apply continuous yaw
                 if self.is_circle_turn and self.flight_state == FlightState.FLYING:

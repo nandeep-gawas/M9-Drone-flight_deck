@@ -35,6 +35,9 @@ from flight_deck.protocol import (
     DURATION_FLIP,
     DURATION_RETURN_HOME,
     DURATION_TORNADO_360,
+    DURATION_BARREL_SETTLE,
+    DURATION_SNAP_TURN,
+    DURATION_DOUBLE_BARREL,
 )
 from flight_deck.network import DroneNetworkClient
 
@@ -313,6 +316,89 @@ class TestDroneNetworkClient(unittest.TestCase):
         # Emergency stop cancels active tornado
         self.client.trigger_emergency_stop()
         self.assertEqual(self.client._tornado_until, 0.0)
+
+    def test_double_barrel_snap_phases(self):
+        # Phase 1: First Barrel Roll (Right) -> 0.0s to 0.6s
+        r, p, y, flip, desc = DroneNetworkClient.compute_double_barrel_phase(0.2, "right_first")
+        self.assertEqual(r, STICK_MAX)
+        self.assertEqual(p, STICK_CENTER)
+        self.assertEqual(y, STICK_CENTER)
+        self.assertTrue(flip)
+        self.assertIn("Right", desc)
+
+        # Phase 2: Inter-roll stabilization & edge reset -> 0.6s to 1.0s
+        r, p, y, flip, desc = DroneNetworkClient.compute_double_barrel_phase(0.8, "right_first")
+        self.assertEqual(r, STICK_CENTER)
+        self.assertEqual(p, STICK_CENTER)
+        self.assertEqual(y, STICK_CENTER)
+        self.assertFalse(flip)
+        self.assertIn("Leveling between rolls", desc)
+
+        # Phase 3: Second Barrel Roll (Left) -> 1.0s to 1.6s
+        r, p, y, flip, desc = DroneNetworkClient.compute_double_barrel_phase(1.3, "right_first")
+        self.assertEqual(r, STICK_MIN)
+        self.assertEqual(p, STICK_CENTER)
+        self.assertEqual(y, STICK_CENTER)
+        self.assertTrue(flip)
+        self.assertIn("Left", desc)
+
+        # Phase 4: Inter-maneuver stabilization & edge reset -> 1.6s to 2.0s
+        r, p, y, flip, desc = DroneNetworkClient.compute_double_barrel_phase(1.8, "right_first")
+        self.assertEqual(r, STICK_CENTER)
+        self.assertEqual(p, STICK_CENTER)
+        self.assertEqual(y, STICK_CENTER)
+        self.assertFalse(flip)
+        self.assertIn("Leveling before snap turn", desc)
+
+        # Phase 5: 180° CW Snap Turn -> 2.0s to 2.9s
+        r, p, y, flip, desc = DroneNetworkClient.compute_double_barrel_phase(2.4, "right_first")
+        self.assertEqual(r, STICK_CENTER)
+        self.assertEqual(p, STICK_CENTER)
+        self.assertEqual(y, STICK_CENTER + 75)
+        self.assertFalse(flip)
+        self.assertIn("180° CW Snap Turn", desc)
+
+        # Completion -> >= 2.9s
+        r, p, y, flip, desc = DroneNetworkClient.compute_double_barrel_phase(3.0, "right_first")
+        self.assertEqual(r, STICK_CENTER)
+        self.assertEqual(p, STICK_CENTER)
+        self.assertEqual(y, STICK_CENTER)
+        self.assertFalse(flip)
+        self.assertIn("COMPLETE", desc)
+
+        # Reverse direction: Phase 1 Left, Phase 3 Right, Phase 5 CCW
+        r1, _, _, _, desc1 = DroneNetworkClient.compute_double_barrel_phase(0.2, "left_first")
+        self.assertEqual(r1, STICK_MIN)
+        r3, _, _, _, desc3 = DroneNetworkClient.compute_double_barrel_phase(1.3, "left_first")
+        self.assertEqual(r3, STICK_MAX)
+        _, _, y5, _, desc5 = DroneNetworkClient.compute_double_barrel_phase(2.4, "left_first")
+        self.assertEqual(y5, STICK_CENTER - 75)
+        self.assertIn("CCW", desc5)
+
+    def test_double_barrel_snap_client_lifecycle(self):
+        # Disarmed trigger should be rejected
+        self.client.trigger_double_barrel_snap("right_first")
+        self.assertFalse(self.client._double_barrel_active)
+
+        # Arm and set in-flight
+        self.client.arm()
+        self.client.flight_state = FlightState.FLYING
+
+        # Trigger sequence
+        self.client.trigger_double_barrel_snap("right_first")
+        self.assertTrue(self.client._double_barrel_active)
+        self.assertGreater(self.client._double_barrel_start_time, 0.0)
+
+        # Space (center_sticks) cancels active sequence immediately
+        self.client.center_sticks()
+        self.assertFalse(self.client._double_barrel_active)
+
+        # Trigger again and test emergency stop cancellation
+        self.client.trigger_double_barrel_snap("right_first")
+        self.assertTrue(self.client._double_barrel_active)
+        self.client.trigger_emergency_stop()
+        self.assertFalse(self.client._double_barrel_active)
+        self.assertEqual(self.client.flight_state, FlightState.EMERGENCY)
 
 
 if __name__ == "__main__":

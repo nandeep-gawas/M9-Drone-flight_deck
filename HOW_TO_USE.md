@@ -82,7 +82,20 @@ cd M9-Drone-flight_deck
 
 ---
 
-## 4. Special Stunts: Tornado 360 & 360° Flips
+## 4. Special Stunts: Double Barrel Roll, Tornado 360 & Flips
+
+### Double Barrel Roll + 180° Snap Turn
+* **What it does:** An impressive choreographed aerobatic stunt that executes:
+  1. **Barrel Roll Right** (0.6s acrobatic flip pulse)
+  2. **Inter-roll Leveling** (0.4s settling & command edge-reset)
+  3. **Barrel Roll Left** (0.6s reverse acrobatic flip pulse)
+  4. **Inter-maneuver Leveling** (0.4s settling)
+  5. **180° Snap Turn** (0.9s snappy yaw turn)
+  6. **Auto-stabilization** back to locked altitude-hold hover.
+* **Standard (Right $\rightarrow$ Left $\rightarrow$ 180° CW Turn):** Press **`B`** or click **`🔄 Double Barrel + 180° Snap (B)`**.
+* **Reverse (Left $\rightarrow$ Right $\rightarrow$ 180° CCW Turn):** Press **`Shift + B`** or click **`↺ Rev (Shift+B)`**.
+* **Ceiling & Safety Clearance:** Maintain at least 1.8–2.0 meters of altitude and open airspace.
+* **Instant Cancel:** Tap `Spacebar` (center sticks) or `E` (emergency stop) anytime.
 
 ### Tornado 360 (One Complete Yaw Rotation)
 * **What it does:** Executes exactly one full 360° yaw spin in place while maintaining stabilized hover altitude, then automatically locks back into steady hover.
@@ -115,6 +128,8 @@ cd M9-Drone-flight_deck
 | **`O`** | **Auto-Spin** | Continuous 360° circle yaw rotation |
 | **`U`** | **Tornado 360 (CW)** | Executes exactly one complete 360° clockwise yaw rotation |
 | **`Shift + U`** | **Tornado 360 (CCW)** | Executes exactly one complete 360° counter-clockwise yaw rotation |
+| **`B`** | **Double Barrel + Snap Turn** | Right Roll $\rightarrow$ Left Roll $\rightarrow$ 180° CW Snap Turn $\rightarrow$ Hover |
+| **`Shift + B`** | **Double Barrel Reverse** | Left Roll $\rightarrow$ Right Roll $\rightarrow$ 180° CCW Snap Turn $\rightarrow$ Hover |
 | **`M`** | **Stick Mode** | Toggles Mode 2 (US) vs Mode 1 (EU) |
 | **`Z`** | **Reset Trims** | Re-zeros Pitch, Roll, and Yaw trims |
 | **`Shift + WASD`**| **Fine Trims** | Drift micro-adjustments ($\pm 2$) |

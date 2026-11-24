@@ -564,6 +564,17 @@ class DroneDesktopWindow(QMainWindow):
         self.btn_flip_back.clicked.connect(lambda: self._on_flip_clicked("backward"))
         flip_layout.addWidget(self.btn_flip_back, 2, 1)
 
+        # Double Barrel Roll + 180° Snap Turn
+        self.btn_double_barrel = QPushButton("🔄 Double Barrel + 180° Snap (B)")
+        self.btn_double_barrel.setStyleSheet("background-color: #4a148c; color: white; font-weight: bold; padding: 7px;")
+        self.btn_double_barrel.clicked.connect(lambda: self._on_double_barrel_clicked("right_first"))
+        flip_layout.addWidget(self.btn_double_barrel, 3, 0, 1, 2)
+
+        self.btn_double_barrel_rev = QPushButton("↺ Rev (Shift+B)")
+        self.btn_double_barrel_rev.setStyleSheet("background-color: #311b92; color: white; font-weight: bold; padding: 7px;")
+        self.btn_double_barrel_rev.clicked.connect(lambda: self._on_double_barrel_clicked("left_first"))
+        flip_layout.addWidget(self.btn_double_barrel_rev, 3, 2)
+
         layout.addWidget(flip_group)
         return container
 
@@ -719,6 +730,14 @@ class DroneDesktopWindow(QMainWindow):
             return
         self.client.trigger_tornado_360(direction)
         self._log_info(f"Triggered Tornado 360 ({direction.upper()}) — executing one complete 360° yaw rotation.")
+
+    def _on_double_barrel_clicked(self, direction: str = "right_first"):
+        if not self.client.is_armed:
+            QMessageBox.warning(self, "Arm Required", "Drone must be armed before executing acrobatic stunts!")
+            return
+        self.client.trigger_double_barrel_snap(direction)
+        dir_label = "Right -> Left -> 180° Snap" if direction == "right_first" else "Left -> Right -> 180° Snap"
+        self._log_info(f"Triggered Double Barrel Roll + 180° Snap Turn ({dir_label}).")
 
     def _on_stick_mode_changed(self, mode: ControlStickMode):
         self.client.set_stick_mode(mode)
@@ -905,6 +924,8 @@ class DroneDesktopWindow(QMainWindow):
                 self._adjust_trim("yaw", TRIM_STEP)
             elif key == Qt.Key_U:
                 self._on_tornado_clicked("ccw")
+            elif key == Qt.Key_B:
+                self._on_double_barrel_clicked("left_first")
             return
 
         if key == Qt.Key_C:
@@ -925,6 +946,8 @@ class DroneDesktopWindow(QMainWindow):
             self._on_circle_turn_clicked()
         elif key == Qt.Key_U:
             self._on_tornado_clicked("cw")
+        elif key == Qt.Key_B:
+            self._on_double_barrel_clicked("right_first")
         elif key == Qt.Key_Z:
             self._reset_trims()
         elif key == Qt.Key_M:

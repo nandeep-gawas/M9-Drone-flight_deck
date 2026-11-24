@@ -35,6 +35,9 @@ DURATION_FLIP = 0.6             # 600 ms pulse (DeviceBLFragment.turn360)
 DURATION_LANDING_DESCENT = 4.0  # Estimated descent duration until touchdown
 DURATION_RETURN_HOME = 3.0      # 3.0s auto-return pulse window
 DURATION_TORNADO_360 = 1.8      # 1.8s for one complete 360-degree yaw rotation
+DURATION_BARREL_SETTLE = 0.4    # 400ms settling & flip-bit reset window between acrobatic rolls
+DURATION_SNAP_TURN = 0.9        # 900ms for 180-degree yaw snap turn
+DURATION_DOUBLE_BARREL = 2.9    # Total sequence duration (0.6 + 0.4 + 0.6 + 0.4 + 0.9)
 
 
 class TC_CmdBits(IntEnum):
